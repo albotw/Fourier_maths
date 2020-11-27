@@ -53,6 +53,7 @@ unsigned int getNumberCycles(unsigned int nSamples)
 complex<double> DFT(complex<double> c1, complex<double> c2, int k, int n)
 {
     complex<double> omega = exp(-(2 * M_PI * I * (double)k) / (double)n);
+    /*rajouter un modulo k pour changer l'addition en soustraction*/
     return c1 + omega * c2;
 }
 
@@ -65,9 +66,11 @@ void cooleyTurkey()
             on met la largeur papillon comme étant cycle²
             pour chaque DTF à faire (de 0 à nSamples)
                 Si le compteur de DTF est < la moitié de la largeur du papillon:
-                    out[i] = DTF(out[i], out[i + cycle], 0, largeurPap)
+                    out[i] = DTF(out[i], out[i + cycle], compteurPap, largeurPap)
                 Si le compteur de DTF est > que la moitié de la largeur du papillon:
-                    out[i] = DTF(out[i - cycle], out[i], 1, largeurPap) 
+                    out[i] = DTF(out[i - cycle], out[i], compteurPap, largeurPap) 
+                si compteurPap++ >= largeurPap
+                    compteurPap = 0
     */
 }
 

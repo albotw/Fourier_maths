@@ -24,6 +24,7 @@
     <ProjectGuid>{bd9b1dc1-cdcf-4531-a99f-3024db01b7ed}</ProjectGuid>
     <RootNamespace>FOURRIER</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+    <ProjectName>FOURIER</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
