@@ -16,14 +16,24 @@ void affBin(unsigned long data, unsigned char nBits, char car0, char car1)
     {
         if (!(data & (1 << i)))
         {
-            printf("%c", car0);
+            cout << car0;
         }
         else
         {
-            printf("%c", car1);
+            cout << car1;
         }
     }
-    printf("\n");
+    cout << endl;
+}
+
+/*Affiche un vecteur de complexes*/
+void printVector(vector<complex<double>>* data)
+{
+    vector<complex<double>>::iterator it;
+    for (it = data->begin(); it != data->end(); ++it)
+    {
+        cout << *it << endl;
+    }
 }
 
 /*fait un effet miroir pour les bits: 100 -> 001, 101 -> 101*/
@@ -40,7 +50,7 @@ unsigned long mirror(unsigned long data, unsigned long nBits)
     return output;
 }
 
-/*Pour compter combien de cycles de recomposition on doit effectuer*/
+/*Pour compter combien de cycles de recomposition on doit effectuer (2^X = nSamples)*/
 unsigned int getNumberCycles(unsigned int nSamples)
 {
     unsigned int i = 0;
@@ -49,210 +59,113 @@ unsigned int getNumberCycles(unsigned int nSamples)
 
     return i;
 }
+
 /*Mini DFT entre deux valeurs*/
-/*Tableau de 2 complexes, échantillon actuel, nombre d'échantillons*/
-complex<double> DFT(complex<double> c1, complex<double> c2, int k, int n, bool isEven)
+/*1er chiffre complexe, 2e chiffre complexe, exposant, indice, traitement pair|impair, DFT normale|inversée*/
+complex<double> DFT(complex<double> c1, complex<double> c2, int k, int n, bool isEven, bool invert)
 {
-    complex<double> omega = exp((-2 * M_PI * I * (double)k) / (double)n);
+    complex<double> omega = 0;
+    if (invert)
+        omega = exp((-2 * M_PI * I * (double)k) / (double)n);
+    else 
+        omega = exp((2 * M_PI * I * (double)k) / (double)n);
+
     if (isEven)
         return c1 + (omega * c2);
     else
         return c1 - (omega * c2);
 }
 
-complex<double> iDFT(complex<double> c1, complex<double> c2, int k, int n, bool isEven)
-{
-    complex<double> omega = exp((2 * M_PI * I * (double)k) / (double)n);
-    if (isEven)
-        return c1 + (omega * c2);
-    else
-        return c1 - (omega * c2);
-}
+/*
+    On calcule le nombre de cycles total à partir du nombre d'échantillons
 
-vector<complex<double>> cooleyTurkey(vector<complex<double>> data)
+    pour chaque cycle (1 à cyclesTotal inclus)
+        on copie out dans in
+        on met la largeur papillon comme étant cycle²
+        pour chaque DTF à faire (de 0 à nSamples)
+            Si le compteur de DTF est < la moitié de la largeur du papillon:
+                out[i] = DTF(in[i], in[i + offset], compteurPap, largeurPap)
+            Si le compteur de DTF est > que la moitié de la largeur du papillon:
+                out[i] = DTF(in[i - offset], in[i], compteurPap, largeurPap)
+            si compteurPap++ >= largeurPap
+                compteurPap = 0
+*/
+
+vector<complex<double>>* cooleyTurkey(vector<complex<double>> * data, bool inverted)
 {
-    /*
-        On calcule le nombre de cycles total à partir du nombre d'échantillons
-        
-        pour chaque cycle (1 à cyclesTotal inclus)
-            on copie out dans in
-            on met la largeur papillon comme étant cycle²
-            pour chaque DTF à faire (de 0 à nSamples)
-                Si le compteur de DTF est < la moitié de la largeur du papillon:
-                    out[i] = DTF(in[i], in[i + cycle], compteurPap, largeurPap)
-                Si le compteur de DTF est > que la moitié de la largeur du papillon:
-                    out[i] = DTF(in[i - cycle], in[i], compteurPap, largeurPap) 
-                si compteurPap++ >= largeurPap
-                    compteurPap = 0
-    */
-    unsigned int samples = data.size();
-    vector<complex<double>> in(samples);
-    for (int i = 0; i < data.size(); i++)
+
+    unsigned int samples = data->size();
+    unsigned int nCycles = getNumberCycles(samples);
+    vector<complex<double>>* in = new vector<complex<double>>();
+    vector<complex<double>>* out = new vector<complex<double>>();
+    unsigned int maxExponent = 1;
+    unsigned int offset = 1;
+    
+    for (int i = 0; i < data->size(); i++)
     {
-        in[i] = data[mirror(i, 3)];
+        in->push_back(data->at(mirror(i, 3)));
     }
     
-    vector<complex<double>> out(samples);
-    unsigned int maxExponent = 1;
-    unsigned int butterflyOffset = 1;
-    unsigned int nCycles = getNumberCycles(samples);
     for (int cycle = 1; cycle <= nCycles; cycle++)
     {
         if (cycle != 1)
-            in = out;
+        {
+            in->clear();
+            *in = *out;
+            out->clear();
+        }
 
         unsigned int butterflyWidth = pow(2.0, cycle);
         unsigned int butterflyCounter = 0;
         unsigned int exponent = 0;
-        //cout << butterflyWidth << endl;
+
         for (int ftd = 0; ftd < samples; ftd++)
         {
-            cout << "but " << butterflyCounter << endl;
-            cout << "expo " << exponent << endl;
-            //cout << (ftd > (butterflyWidth / 2)) << endl;
             if (butterflyCounter < (butterflyWidth / 2))
-            { 
-                cout << "c1 " << ftd << " c2 " << (ftd + cycle) << endl;
-                out[ftd] = DFT(in[ftd], in[ftd + butterflyOffset], exponent, butterflyWidth, true);
-                cout << "out" << out[ftd] << endl;
-            }
+                out->push_back(DFT(in->at(ftd), in->at(ftd + offset), exponent, butterflyWidth, true, inverted));
             else if (butterflyCounter >= (butterflyWidth / 2))
-            { 
-                cout << "c1 " << (ftd - cycle) << " c2 " << ftd << endl;
-                out[ftd] = DFT(in[ftd - butterflyOffset], in[ftd], exponent, butterflyWidth, false);
-                cout << "out:"<< out[ftd] << endl;
-            }
-            cout << endl;
+                out->push_back(DFT(in->at(ftd - offset), in->at(ftd), exponent, butterflyWidth, false, inverted));
 
-            butterflyCounter++;
-            if (butterflyCounter >= butterflyWidth)
-            {
+            if (++butterflyCounter >= butterflyWidth)
                 butterflyCounter = 0;
-            }
 
-            exponent++;
-            if (exponent >= maxExponent)
-            {
+            if (++exponent >= maxExponent)
                 exponent = 0;
-            }
             
         }
-        cout << "--- CYCLE ---" << endl;
-
         maxExponent *= 2;
-
-        butterflyOffset *= 2;
+        offset *= 2;
     }
 
-    
-    
-    return out;
-}
-
-vector<complex<double>> icooleyTurkey(vector<complex<double>> data)
-{
-    /*
-        On calcule le nombre de cycles total à partir du nombre d'échantillons
-
-        pour chaque cycle (1 à cyclesTotal inclus)
-            on copie out dans in
-            on met la largeur papillon comme étant cycle²
-            pour chaque DTF à faire (de 0 à nSamples)
-                Si le compteur de DTF est < la moitié de la largeur du papillon:
-                    out[i] = DTF(in[i], in[i + cycle], compteurPap, largeurPap)
-                Si le compteur de DTF est > que la moitié de la largeur du papillon:
-                    out[i] = DTF(in[i - cycle], in[i], compteurPap, largeurPap)
-                si compteurPap++ >= largeurPap
-                    compteurPap = 0
-    */
-    unsigned int samples = data.size();
-    vector<complex<double>> in(samples);
-    for (int i = 0; i < data.size(); i++)
+    if (inverted)
     {
-        in[i] = data[mirror(i, 3)];
-    }
-
-    vector<complex<double>> out(samples);
-    unsigned int maxExponent = 1;
-    unsigned int butterflyOffset = 1;
-    unsigned int nCycles = getNumberCycles(samples);
-    for (int cycle = 1; cycle <= nCycles; cycle++)
-    {
-        if (cycle != 1)
-            in = out;
-
-        unsigned int butterflyWidth = pow(2.0, cycle);
-        unsigned int butterflyCounter = 0;
-        unsigned int exponent = 0;
-        //cout << butterflyWidth << endl;
-        for (int ftd = 0; ftd < samples; ftd++)
+        for (int i = 0; i < out->size(); i++)
         {
-            cout << "but " << butterflyCounter << endl;
-            cout << "expo " << exponent << endl;
-            //cout << (ftd > (butterflyWidth / 2)) << endl;
-            if (butterflyCounter < (butterflyWidth / 2))
-            {
-                cout << "c1 " << ftd << " c2 " << (ftd + cycle) << endl;
-                out[ftd] = iDFT(in[ftd], in[ftd + butterflyOffset], exponent, butterflyWidth, true);
-                cout << "out" << out[ftd] << endl;
-            }
-            else if (butterflyCounter >= (butterflyWidth / 2))
-            {
-                cout << "c1 " << (ftd - cycle) << " c2 " << ftd << endl;
-                out[ftd] = iDFT(in[ftd - butterflyOffset], in[ftd], exponent, butterflyWidth, false);
-                cout << "out:" << out[ftd] << endl;
-            }
-            cout << endl;
-
-            butterflyCounter++;
-            if (butterflyCounter >= butterflyWidth)
-            {
-                butterflyCounter = 0;
-            }
-
-            exponent++;
-            if (exponent >= maxExponent)
-            {
-                exponent = 0;
-            }
-
+            out->at(i) = out->at(i) / double(samples);
         }
-        cout << "--- CYCLE ---" << endl;
-
-        maxExponent *= 2;
-
-        butterflyOffset *= 2;
     }
-
-    for (int i = 0; i < out.size(); i++)
-    {
-        out[i] = out[i] / (double)samples;
-    }
-
-    for (int i = 0; i < out.size(); i++)
-    {
-        cout << out[i] << endl;
-    }
-    cout << endl;
-    for (int i = 0; i < in.size(); i++)
-    {
-        cout << in[i] << endl;
-    }
+    
+    delete in;
     return out;
 }
 
 int main()
 {
     vector<complex<double>> test1(8);
-    test1[0] = complex<double>(1.0, 0.0);
+    test1[0] = complex<double>(0.0, 0.0);
     test1[1] = complex<double>(1.0, 0.0);
-    test1[2] = complex<double>(1.0, 0.0);
-    test1[3] = complex<double>(1.0, 0.0);
-    test1[4] = complex<double>(1.0, 0.0);
-    test1[5] = complex<double>(1.0, 0.0);
-    test1[6] = complex<double>(1.0, 0.0);
-    test1[7] = complex<double>(1.0, 0.0);
+    test1[2] = complex<double>(0.0, 0.0);
+    test1[3] = complex<double>(0.0, 0.0);
+    test1[4] = complex<double>(0.0, 0.0);
+    test1[5] = complex<double>(0.0, 0.0);
+    test1[6] = complex<double>(0.0, 0.0);
+    test1[7] = complex<double>(0.0, 0.0);
 
-    vector<complex<double>> result1 = icooleyTurkey(test1);
-    
+    vector<complex<double>>* result1 = cooleyTurkey(&test1, false);
+    printVector(result1);
+
+    cout << endl;
+
+    vector<complex<double>>* result2 = cooleyTurkey(result1, true);
+    printVector(result2);
 }
