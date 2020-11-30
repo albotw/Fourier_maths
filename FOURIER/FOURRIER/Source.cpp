@@ -4,6 +4,7 @@
 #include <complex>
 #include <vector>
 
+#define vc vector<complex<double>>
 using namespace std;
 
 const complex<double> I(0.0, 1.0);
@@ -37,14 +38,22 @@ void printVector(vector<complex<double>>* data)
 }
 
 /*fait un effet miroir pour les bits: 100 -> 001, 101 -> 101*/
-/*chiffre à inverser, nombre de bits du chiffre*/
-unsigned long mirror(unsigned long data, unsigned long nBits)
+/*chiffre à inverser, valeur maximale du chiffre*/
+unsigned int mirror(unsigned int data, unsigned int max)
 {
-    unsigned long output = 0l;
-    for (int i = 0; i < nBits; i++)
+    /*comme on sait que max est samples, c'est forcément une puissance de deux*/
+    /*Aussi, elle représente le nombre de bits pour la valeur maximale, évitant de modifier les 16 bits et de faire des dépassements de buffer.*/
+    unsigned int bits = 0;
+    while ((max & (1 << bits)) == 0)
+    {
+        bits++;
+    }
+
+    unsigned int output = 0;
+    for (int i = 0; i < bits; i++)
     {
         if (data & (1 << i))
-            output |= 1 << ((nBits - 1) - i);
+            output |= 1 << ((bits - 1) - i);
     }
 
     return output;
@@ -62,7 +71,7 @@ unsigned int getNumberCycles(unsigned int nSamples)
 
 /*Mini DFT entre deux valeurs*/
 /*1er chiffre complexe, 2e chiffre complexe, exposant, indice, traitement pair|impair, DFT normale|inversée*/
-complex<double> DFT(complex<double> c1, complex<double> c2, int k, int n, bool isEven, bool invert)
+complex<double> MiniTFD(complex<double> c1, complex<double> c2, int k, int n, bool isEven, bool invert)
 {
     complex<double> omega = 0;
     if (invert)
@@ -77,23 +86,25 @@ complex<double> DFT(complex<double> c1, complex<double> c2, int k, int n, bool i
 }
 
 /*
-    On calcule le nombre de cycles total à partir du nombre d'échantillons
-
-    pour chaque cycle (1 à cyclesTotal inclus)
-        on copie out dans in
-        on met la largeur papillon comme étant cycle²
-        pour chaque DTF à faire (de 0 à nSamples)
-            Si le compteur de DTF est < la moitié de la largeur du papillon:
-                out[i] = DTF(in[i], in[i + offset], compteurPap, largeurPap)
-            Si le compteur de DTF est > que la moitié de la largeur du papillon:
-                out[i] = DTF(in[i - offset], in[i], compteurPap, largeurPap)
-            si compteurPap++ >= largeurPap
-                compteurPap = 0
+* On met l'exposant max à 1
+* On met le décalage du papillon par rapport à in à 1.
+* On récupère le nombre d'échantillon
+* On calcule le nombre de cycles.
+* On copie data dans in avec l'inversion des bits
+* 
+* Pour chaque cycle (de 1 à nCycle inclus)
+*   Si on est pas sur le premier cycle
+*       on vide in
+*       on copie out dans in
+*       on vide out.
+* 
+*   On met la largeur du papillon comme étant 2^cycle
+*   On met le compteur du butterfly à 0.
+*   On met le compteur de l'exposant à 0.
 */
 
-vector<complex<double>>* cooleyTurkey(vector<complex<double>> * data, bool inverted)
+vector<complex<double>>* FFT_1D(vector<complex<double>> * data, bool inverted)
 {
-
     unsigned int samples = data->size();
     unsigned int nCycles = getNumberCycles(samples);
     vector<complex<double>>* in = new vector<complex<double>>();
@@ -101,9 +112,9 @@ vector<complex<double>>* cooleyTurkey(vector<complex<double>> * data, bool inver
     unsigned int maxExponent = 1;
     unsigned int offset = 1;
     
-    for (int i = 0; i < data->size(); i++)
+    for (int i = 0; i < samples; i++)
     {
-        in->push_back(data->at(mirror(i, 3)));
+        in->push_back(data->at(mirror(i, samples)));
     }
     
     for (int cycle = 1; cycle <= nCycles; cycle++)
@@ -119,12 +130,12 @@ vector<complex<double>>* cooleyTurkey(vector<complex<double>> * data, bool inver
         unsigned int butterflyCounter = 0;
         unsigned int exponent = 0;
 
-        for (int ftd = 0; ftd < samples; ftd++)
+        for (int tfd = 0; tfd < samples; tfd++)
         {
             if (butterflyCounter < (butterflyWidth / 2))
-                out->push_back(DFT(in->at(ftd), in->at(ftd + offset), exponent, butterflyWidth, true, inverted));
+                out->push_back(MiniTFD(in->at(tfd), in->at(tfd + offset), exponent, butterflyWidth, true, inverted));
             else if (butterflyCounter >= (butterflyWidth / 2))
-                out->push_back(DFT(in->at(ftd - offset), in->at(ftd), exponent, butterflyWidth, false, inverted));
+                out->push_back(MiniTFD(in->at(tfd - offset), in->at(tfd), exponent, butterflyWidth, false, inverted));
 
             if (++butterflyCounter >= butterflyWidth)
                 butterflyCounter = 0;
@@ -149,8 +160,122 @@ vector<complex<double>>* cooleyTurkey(vector<complex<double>> * data, bool inver
     return out;
 }
 
+vector<complex<double>>* FFT_2D(vector<complex<double>>* data, int M, int N, bool invert)
+{
+    vector<complex<double>>* result = new vector<complex<double>>();
+    
+    /*Première série de FFT_1D sur les lignes*/
+    for (int i = 0; i < N; i++)
+    {
+        vc* temp = new vc();
+        temp->insert(temp->begin(), data->begin() + i * M, data->begin() + i * M + M);
+        temp = FFT_1D(temp, invert);
+        result->insert(result->end(), temp->begin(), temp->end());
+        delete temp;
+    }
+
+    vector<complex<double>>* output = new vector<complex<double>>(M * N);
+    /*Seconde série de FFT_1D sur les colonnes*/
+    for (int i = 0; i < M; i++)
+    {
+        vc* temp = new vc();
+        //on prend la colonne i de chaque ligne j
+        for (int j = 0; j < N; j++)
+        {
+            temp->push_back(result->at(i + j * M));
+        }
+
+        temp = FFT_1D(temp, invert);
+
+        for (int j = 0; j < N; j++)
+        {
+            output->at(i + j * M) = temp->at(j);
+        }
+        delete temp;
+
+    }
+
+    delete result;
+    return output;
+}
+
+vector<complex<double>> * TFD_2D(vector<complex<double>> * data, int M, int N)
+{
+    vector<complex<double>>* out = new vector<complex<double>>();
+
+    for (int u = 0; u < M; ++u)
+    {
+        for (int v = 0; v < M; ++v)
+        {
+            complex<double> result = (0, 0);
+            for (int x = 0; x < M; ++x)
+            {
+                for (int y = 0; y < N; ++y)
+                {
+                    double n1 = (double)x * (double)u;
+                    double n2 = (double)y * (double)v;
+                    double coeff = n1 / M + n2 / N;
+                    result += data->at(y + M * x) * exp((-2 * M_PI * I * coeff));
+                }
+            }
+            out->push_back(result);
+        }
+    }
+
+    return out;
+}
+
+vector<complex<double>>* iTFD_2D(vector<complex<double>>* data, int M, int N)
+{
+    vector<complex<double>>* out = new vector<complex<double>>();
+
+    for (int u = 0; u < M; ++u)
+    {
+        for (int v = 0; v < M; ++v)
+        {
+            complex<double> result = (0, 0);
+            for (int x = 0; x < M; ++x)
+            {
+                for (int y = 0; y < N; ++y)
+                {
+                    double n1 = (double)x * (double)u;
+                    double n2 = (double)y * (double)v;
+                    double coeff = n1 / M + n2 / N;
+                    result += data->at(y + M * x) * exp((2 * M_PI * I * coeff));
+                }
+            }
+            out->push_back(result);
+        }
+    }
+
+    for (int i = 0; i < M * N; i++)
+    {
+        out->at(i) = out->at(i) / ((double)M * (double)N);
+    }
+
+    return out;
+}
+
+vector<complex<double>>* TFD_1D(vector<complex<double>>* data)
+{
+    int size = data->size();
+    vector<complex<double>>* out = new vector<complex<double>>();
+    for (int i_out = 0; i_out < size; i_out++)
+    {
+        complex<double> result = (0,0);
+        for (int i = 0; i < size; i++)
+        {
+            result += data->at(i) * exp((-2 * M_PI * I * ((double)i *(double)i_out)) / (double)size);
+        }
+        out->push_back(result);
+    }
+
+    return out;
+}
+
 int main()
 {
+    /*
     vector<complex<double>> test1(8);
     test1[0] = complex<double>(0.0, 0.0);
     test1[1] = complex<double>(1.0, 0.0);
@@ -168,4 +293,35 @@ int main()
 
     vector<complex<double>>* result2 = cooleyTurkey(result1, true);
     printVector(result2);
+
+    cout << endl;
+
+    */
+
+    vector<complex<double>> test2(4);
+    test2[0] = complex<double>(1.0, 0.0);
+    test2[1] = complex<double>(1.0, 0.0);
+    test2[2] = complex<double>(0.0, 0.0);
+    test2[3] = complex<double>(0.0, 0.0);
+
+    vector<complex<double>>* result3 = TFD_2D(&test2, 2, 2);
+    printVector(result3);
+
+    cout << endl;
+
+    vector<complex<double>>* inv1 = iTFD_2D(result3, 2, 2);
+    printVector(inv1);
+    cout << endl;
+
+    vector<complex<double>>* result4 = FFT_2D(&test2, 2, 2, false);
+    printVector(result4);
+    cout << endl;
+
+    vector<complex<double>>* inv2 = FFT_2D(result4, 2, 2, true);
+    printVector(inv2);
+    cout << endl;
+
+    //vector<complex<double>>* result3 = TFD_1D(&test2);
+    //printVector(result3);
+
 }
