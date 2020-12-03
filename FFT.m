@@ -1,6 +1,7 @@
-X = [2, 3, 4, 2];
-Y = fft(X);
-Z = ifft(Y);
+signal_origine = [0, 1, 0, 0];
+signal_FFT = fft(signal_origine);
+signal_iFFT = ifft(signal_FFT);
 
-Img = [2 1; -1 1];
-Img_fft = fft2(Img);
+matrice_origine = [1 0; 1 0];
+matrice_FFT = fft2(matrice_origine);
+matrice_iFFT = ifft2(matrice_FFT);

@@ -4,7 +4,6 @@
 #include <complex>
 #include <vector>
 
-#define vc vector<complex<double>>
 using namespace std;
 
 const complex<double> I(0.0, 1.0);
@@ -28,12 +27,15 @@ void affBin(unsigned long data, unsigned char nBits, char car0, char car1)
 }
 
 /*Affiche un vecteur de complexes*/
-void printVector(vector<complex<double>>* data)
+void printVector(vector<complex<double>>* data, int M, int N)
 {
-    vector<complex<double>>::iterator it;
-    for (it = data->begin(); it != data->end(); ++it)
+    for (int i = 0; i < M; i++)
     {
-        cout << *it << endl;
+        for (int j = 0; j < N; j++)
+        {
+            cout << data->at(i + M * j) << " ";
+        }
+        cout << endl;
     }
 }
 
@@ -75,9 +77,9 @@ complex<double> MiniTFD(complex<double> c1, complex<double> c2, int k, int n, bo
 {
     complex<double> omega = 0;
     if (invert)
-        omega = exp((-2 * M_PI * I * (double)k) / (double)n);
-    else 
         omega = exp((2 * M_PI * I * (double)k) / (double)n);
+    else 
+        omega = exp((-2 * M_PI * I * (double)k) / (double)n);
 
     if (isEven)
         return c1 + (omega * c2);
@@ -167,7 +169,7 @@ vector<complex<double>>* FFT_2D(vector<complex<double>>* data, int M, int N, boo
     /*Première série de FFT_1D sur les lignes*/
     for (int i = 0; i < N; i++)
     {
-        vc* temp = new vc();
+        vector<complex<double>>* temp = new vector<complex<double>>();
         temp->insert(temp->begin(), data->begin() + i * M, data->begin() + i * M + M);
         temp = FFT_1D(temp, invert);
         result->insert(result->end(), temp->begin(), temp->end());
@@ -178,7 +180,7 @@ vector<complex<double>>* FFT_2D(vector<complex<double>>* data, int M, int N, boo
     /*Seconde série de FFT_1D sur les colonnes*/
     for (int i = 0; i < M; i++)
     {
-        vc* temp = new vc();
+        vector<complex<double>>* temp = new vector<complex<double>>();
         //on prend la colonne i de chaque ligne j
         for (int j = 0; j < N; j++)
         {
@@ -194,63 +196,42 @@ vector<complex<double>>* FFT_2D(vector<complex<double>>* data, int M, int N, boo
         delete temp;
 
     }
-
     delete result;
     return output;
 }
 
-vector<complex<double>> * TFD_2D(vector<complex<double>> * data, int M, int N)
+vector<complex<double>> * TFD_2D(vector<complex<double>> * data, int M, int N, bool invert)
 {
     vector<complex<double>>* out = new vector<complex<double>>();
 
-    for (int u = 0; u < M; ++u)
+    for (int u = 0; u < M; u++)
     {
-        for (int v = 0; v < M; ++v)
+        for (int v = 0; v < M; v++)
         {
             complex<double> result = (0, 0);
-            for (int x = 0; x < M; ++x)
+            for (int x = 0; x < M; x++)
             {
-                for (int y = 0; y < N; ++y)
+                for (int y = 0; y < N; y++)
                 {
                     double n1 = (double)x * (double)u;
                     double n2 = (double)y * (double)v;
                     double coeff = n1 / M + n2 / N;
-                    result += data->at(y + M * x) * exp((-2 * M_PI * I * coeff));
+                    if (!invert)
+                        result += data->at(y + M * x) * exp((-2 * M_PI * I * coeff));
+                    else
+                        result += data->at(y + M * x) * exp((2 * M_PI * I * coeff));
                 }
             }
             out->push_back(result);
         }
     }
 
-    return out;
-}
-
-vector<complex<double>>* iTFD_2D(vector<complex<double>>* data, int M, int N)
-{
-    vector<complex<double>>* out = new vector<complex<double>>();
-
-    for (int u = 0; u < M; ++u)
+    if (invert)
     {
-        for (int v = 0; v < M; ++v)
+        for (int i = 0; i < M * N; i++)
         {
-            complex<double> result = (0, 0);
-            for (int x = 0; x < M; ++x)
-            {
-                for (int y = 0; y < N; ++y)
-                {
-                    double n1 = (double)x * (double)u;
-                    double n2 = (double)y * (double)v;
-                    double coeff = n1 / M + n2 / N;
-                    result += data->at(y + M * x) * exp((2 * M_PI * I * coeff));
-                }
-            }
-            out->push_back(result);
+            out->at(i) = out->at(i) / ((double)M * (double)N);
         }
-    }
-
-    for (int i = 0; i < M * N; i++)
-    {
-        out->at(i) = out->at(i) / ((double)M * (double)N);
     }
 
     return out;
@@ -275,53 +256,47 @@ vector<complex<double>>* TFD_1D(vector<complex<double>>* data)
 
 int main()
 {
-    /*
-    vector<complex<double>> test1(8);
+    vector<complex<double>> test1(4);
     test1[0] = complex<double>(0.0, 0.0);
     test1[1] = complex<double>(1.0, 0.0);
     test1[2] = complex<double>(0.0, 0.0);
     test1[3] = complex<double>(0.0, 0.0);
-    test1[4] = complex<double>(0.0, 0.0);
-    test1[5] = complex<double>(0.0, 0.0);
-    test1[6] = complex<double>(0.0, 0.0);
-    test1[7] = complex<double>(0.0, 0.0);
-
-    vector<complex<double>>* result1 = cooleyTurkey(&test1, false);
-    printVector(result1);
-
+    cout << "Signal d'origine:" << endl;
+    printVector(&test1, 1, 4);
     cout << endl;
 
-    vector<complex<double>>* result2 = cooleyTurkey(result1, true);
-    printVector(result2);
-
+    vector<complex<double>>* result1 = FFT_1D(&test1, false);
+    cout << "FFT_1D: " << endl;
+    printVector(result1, 1, 4);
     cout << endl;
 
-    */
+    vector<complex<double>>* result2 = FFT_1D(result1, true);
+    cout << "FFT_1D inverse: " << endl;
+    printVector(result2, 1, 4);
+    cout << endl;
 
     vector<complex<double>> test2(4);
     test2[0] = complex<double>(1.0, 0.0);
     test2[1] = complex<double>(1.0, 0.0);
     test2[2] = complex<double>(0.0, 0.0);
     test2[3] = complex<double>(0.0, 0.0);
-
-    vector<complex<double>>* result3 = TFD_2D(&test2, 2, 2);
-    printVector(result3);
-
+    cout << "Matrice d'origine:" << endl;
+    printVector(&test2, 2, 2);
     cout << endl;
 
-    vector<complex<double>>* inv1 = iTFD_2D(result3, 2, 2);
-    printVector(inv1);
+    vector<complex<double>>* result3 = TFD_2D(&test2, 2, 2, false);
+    cout << "TFD_2D: " << endl;
+    printVector(result3, 2, 2);
     cout << endl;
 
     vector<complex<double>>* result4 = FFT_2D(&test2, 2, 2, false);
-    printVector(result4);
+    cout << "FFT_2D: " << endl;
+    printVector(result4, 2, 2);
     cout << endl;
 
-    vector<complex<double>>* inv2 = FFT_2D(result4, 2, 2, true);
-    printVector(inv2);
+    vector<complex<double>>* result5 = FFT_2D(result4, 2, 2, true);
+    cout << "FFT_2D inverse: " << endl;
+    printVector(result5, 2, 2);
     cout << endl;
-
-    //vector<complex<double>>* result3 = TFD_1D(&test2);
-    //printVector(result3);
 
 }
